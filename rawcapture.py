@@ -1,7 +1,5 @@
 #!/usr/bin/env python2
 
-# python rawcapture.py 101900000 5000000
-
 if __name__ == '__main__':
     import ctypes
     import sys
@@ -29,6 +27,8 @@ from optparse import OptionParser
 import osmosdr
 import time
 import wx
+import sys
+import getopt
 
 
 class rawcapture(grc_wxgui.top_block_gui):
@@ -41,9 +41,29 @@ class rawcapture(grc_wxgui.top_block_gui):
         ##################################################
         # Variables
         ##################################################
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], 'f:s:o:h', ['freq=', 'samp_rate=', 'output=', 'help'])
+        except getopt.GetoptError:
+            usage()
+            sys.exit(2)
+
+        for opt, arg in opts:
+            if opt in ('-h', '--help'):
+                usage()
+                sys.exit(2)
+            elif opt in ('-f', '--freq'):
+                self.freq = freq = int(arg) #101900000
+            elif opt in ('-s', '--samp_rate'):
+                self.sample_rate = sample_rate = int(arg) #500000
+            elif opt in ('-o', '--output'):
+                self.output_file = output_file = "outputs/" + str(arg) #output.iq
+            else:
+                usage()
+                sys.exit(2)
+
         self.volume = volume = 1
-        self.sample_rate = sample_rate = int(sys.argv[2]) #500000
-        self.freq = freq = int(sys.argv[1]) #101900000
+        #self.sample_rate = sample_rate = int(sys.argv[2]) #500000
+        #self.freq = freq = int(sys.argv[1]) #101900000
         self.fm_sample = fm_sample = 500e3
         self.audio_rate = audio_rate = 48e3
 
@@ -141,7 +161,7 @@ class rawcapture(grc_wxgui.top_block_gui):
         )
         self.analog_const_source_x_0 = analog.sig_source_f(0, analog.GR_CONST_WAVE, 0, 0, volume)
 
-        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_gr_complex*1, "outputs/output.iq", False)
+        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_gr_complex*1, output_file, False)
         self.blocks_file_sink_0.set_unbuffered(False)
 
         ##################################################
@@ -203,6 +223,9 @@ def main(top_block_cls=rawcapture, options=None):
     tb = top_block_cls()
     tb.Start(True)
     tb.Wait()
+
+def usage():
+    print "How to use:\npython rawcapture.py -f freq (hz) -s samp_rate (hz) -o output_file"
 
 
 if __name__ == '__main__':
