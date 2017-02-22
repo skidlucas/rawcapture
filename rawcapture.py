@@ -30,6 +30,7 @@ import time
 import wx
 import sys
 import getopt
+import re
 
 
 class rawcapture(grc_wxgui.top_block_gui):
@@ -38,6 +39,12 @@ class rawcapture(grc_wxgui.top_block_gui):
         grc_wxgui.top_block_gui.__init__(self, title="rawcapture")
         _icon_path = "/usr/share/icons/hicolor/32x32/apps/gnuradio-grc.png"
         self.SetIcon(wx.Icon(_icon_path, wx.BITMAP_TYPE_ANY))
+
+        # create outputs folder
+        output_path = "outputs/"
+
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
 
         ##################################################
         # Variables
@@ -53,19 +60,45 @@ class rawcapture(grc_wxgui.top_block_gui):
                 usage()
                 sys.exit(2)
             elif opt in ('-f', '--freq'):
-                self.freq = freq = int(arg) #101900000
+                #get int and dec part of the argument
+                if "." not in str(arg): 
+                    freq_has_dec = False
+                    freq_int_part = str(arg)
+                else:
+                    freq_has_dec = True
+                    freq_int_part, freq_dec_part = str(arg).split('.')
+
+                self.freq = freq = float(arg) * 1e6 #101.9
             elif opt in ('-s', '--samp_rate'):
-                self.sample_rate = sample_rate = int(arg) #500000
+                #get int and dec part of the argument
+                if "." not in str(arg): 
+                    sample_rate_has_dec = False
+                    sample_rate_int_part = str(arg)
+                else:
+                    sample_rate_has_dec = True
+                    sample_rate_int_part, sample_rate_dec_part = str(arg).split('.')
+                
+                self.sample_rate = sample_rate = float(arg) * 1e6 #0.5
             elif opt in ('-o', '--output'):
                 full_path = os.path.realpath(__file__)
-                self.output_file = output_file = os.path.dirname(full_path) +"/outputs/"+ str(arg) #output.iq
+                if freq_has_dec is True:
+                    freq_str = freq_int_part + "p" + freq_dec_part + "M"
+                else:
+                    freq_str = freq_int_part + "M"
+
+                if sample_rate_has_dec is True:
+                    sample_rate_str = sample_rate_int_part + "p" + sample_rate_dec_part + "M"
+                else:
+                    sample_rate_str = sample_rate_int_part + "M"
+
+                output_file_name = str(arg) + "_c" + freq_str + "_s" + sample_rate_str + ".iq"
+                print "creating file /outputs/" + output_file_name
+                self.output_file = output_file = os.path.dirname(full_path) + "/outputs/" + output_file_name
             else:
                 usage()
                 sys.exit(2)
 
         self.volume = volume = 1
-        #self.sample_rate = sample_rate = int(sys.argv[2]) #500000
-        #self.freq = freq = int(sys.argv[1]) #101900000
         self.fm_sample = fm_sample = 500e3
         self.audio_rate = audio_rate = 48e3
 
@@ -227,7 +260,7 @@ def main(top_block_cls=rawcapture, options=None):
     tb.Wait()
 
 def usage():
-    print "How to use:\npython rawcapture.py -f freq (hz) -s samp_rate (hz) -o output_file"
+    print "How to use:\npython rawcapture.py -f freq (Mhz) -s samp_rate (Mhz) -o output_file"
 
 
 if __name__ == '__main__':
