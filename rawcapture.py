@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 if __name__ == '__main__':
+    import os
     import ctypes
     import sys
     if sys.platform.startswith('linux'):
@@ -56,7 +57,8 @@ class rawcapture(grc_wxgui.top_block_gui):
             elif opt in ('-s', '--samp_rate'):
                 self.sample_rate = sample_rate = int(arg) #500000
             elif opt in ('-o', '--output'):
-                self.output_file = output_file = "outputs/" + str(arg) #output.iq
+                full_path = os.path.realpath(__file__)
+                self.output_file = output_file = os.path.dirname(full_path) +"/outputs/"+ str(arg) #output.iq
             else:
                 usage()
                 sys.exit(2)
