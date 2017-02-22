@@ -36,11 +36,11 @@ import re
 class rawcapture(grc_wxgui.top_block_gui):
 
     def __init__(self):
-        grc_wxgui.top_block_gui.__init__(self, title="rawcapture")
+        grc_wxgui.top_block_gui.__init__(self, title="RawCapture")
         _icon_path = "/usr/share/icons/hicolor/32x32/apps/gnuradio-grc.png"
         self.SetIcon(wx.Icon(_icon_path, wx.BITMAP_TYPE_ANY))
 
-        # create outputs folder
+        # create outputs folder if it doesn't exist
         output_path = "outputs/"
 
         if not os.path.exists(output_path):
@@ -53,12 +53,12 @@ class rawcapture(grc_wxgui.top_block_gui):
             opts, args = getopt.getopt(sys.argv[1:], 'f:s:o:h', ['freq=', 'samp_rate=', 'output=', 'help'])
         except getopt.GetoptError:
             usage()
-            sys.exit(2)
+
+        output_file_name = "raw"
 
         for opt, arg in opts:
             if opt in ('-h', '--help'):
                 usage()
-                sys.exit(2)
             elif opt in ('-f', '--freq'):
                 #get int and dec part of the argument
                 if "." not in str(arg): 
@@ -80,77 +80,43 @@ class rawcapture(grc_wxgui.top_block_gui):
                 
                 self.sample_rate = sample_rate = float(arg) * 1e6 #0.5
             elif opt in ('-o', '--output'):
-                full_path = os.path.realpath(__file__)
-                if freq_has_dec is True:
-                    freq_str = freq_int_part + "p" + freq_dec_part + "M"
-                else:
-                    freq_str = freq_int_part + "M"
-
-                if sample_rate_has_dec is True:
-                    sample_rate_str = sample_rate_int_part + "p" + sample_rate_dec_part + "M"
-                else:
-                    sample_rate_str = sample_rate_int_part + "M"
-
-                output_file_name = str(arg) + "_c" + freq_str + "_s" + sample_rate_str + ".iq"
-                print "creating file /outputs/" + output_file_name
-                self.output_file = output_file = os.path.dirname(full_path) + "/outputs/" + output_file_name
+                output_file_name = str(arg)
+                
             else:
                 usage()
-                sys.exit(2)
 
-        self.volume = volume = 1
-        self.fm_sample = fm_sample = 500e3
-        self.audio_rate = audio_rate = 48e3
+        # check if there is a freq and a sample_rate
+        try:
+            freq
+        except NameError:
+            print "You didn't enter the center frequency\n"
+            usage()
+
+        try:
+            sample_rate
+        except NameError:
+            print "You didn't enter a sample rate\n"
+            usage()
+        
+        # correctly name the output_file
+        full_path = os.path.realpath(__file__)
+        if freq_has_dec is True:
+            freq_str = freq_int_part + "p" + freq_dec_part + "M"
+        else:
+            freq_str = freq_int_part + "M"
+
+        if sample_rate_has_dec is True:
+            sample_rate_str = sample_rate_int_part + "p" + sample_rate_dec_part + "M"
+        else:
+            sample_rate_str = sample_rate_int_part + "M"
+
+        output_file_name += "_c" + freq_str + "_s" + sample_rate_str + ".iq"
+        print "creating file /outputs/" + output_file_name + "\n\n"
+        self.output_file = output_file = os.path.dirname(full_path) + "/outputs/" + output_file_name
 
         ##################################################
         # Blocks
         ##################################################
-        _volume_sizer = wx.BoxSizer(wx.VERTICAL)
-        self._volume_text_box = forms.text_box(
-            parent=self.GetWin(),
-            sizer=_volume_sizer,
-            value=self.volume,
-            callback=self.set_volume,
-            label="Volume",
-            converter=forms.float_converter(),
-            proportion=0,
-        )
-        self._volume_slider = forms.slider(
-            parent=self.GetWin(),
-            sizer=_volume_sizer,
-            value=self.volume,
-            callback=self.set_volume,
-            minimum=0,
-            maximum=10,
-            num_steps=20,
-            style=wx.SL_HORIZONTAL,
-            cast=float,
-            proportion=1,
-        )
-        self.Add(_volume_sizer)
-        _freq_sizer = wx.BoxSizer(wx.VERTICAL)
-        self._freq_text_box = forms.text_box(
-            parent=self.GetWin(),
-            sizer=_freq_sizer,
-            value=self.freq,
-            callback=self.set_freq,
-            label="Frequency",
-            converter=forms.float_converter(),
-            proportion=0,
-        )
-        self._freq_slider = forms.slider(
-            parent=self.GetWin(),
-            sizer=_freq_sizer,
-            value=self.freq,
-            callback=self.set_freq,
-            minimum=80e6,
-            maximum=180e6,
-            num_steps=1000,
-            style=wx.SL_HORIZONTAL,
-            cast=float,
-            proportion=1,
-        )
-        self.Add(_freq_sizer)
         self.wxgui_fftsink2_0 = fftsink2.fft_sink_c(
             self.GetWin(),
             baseband_freq=freq,
@@ -167,12 +133,7 @@ class rawcapture(grc_wxgui.top_block_gui):
             peak_hold=False,
         )
         self.Add(self.wxgui_fftsink2_0.win)
-        self.rational_resampler_xxx_0 = filter.rational_resampler_fff(
-                interpolation=int(audio_rate/1000),
-                decimation=int(fm_sample/10000),
-                taps=None,
-                fractional_bw=None,
-        )
+    
         self.osmosdr_source_0 = osmosdr.source( args="numchan=" + str(1) + " " + "" )
         self.osmosdr_source_0.set_sample_rate(sample_rate)
         self.osmosdr_source_0.set_center_freq(freq, 0)
@@ -185,72 +146,15 @@ class rawcapture(grc_wxgui.top_block_gui):
         self.osmosdr_source_0.set_bb_gain(20, 0)
         self.osmosdr_source_0.set_antenna("", 0)
         self.osmosdr_source_0.set_bandwidth(0, 0)
-          
-        self.low_pass_filter_0 = filter.fir_filter_ccf(int(sample_rate / fm_sample), firdes.low_pass(
-            1, sample_rate, 100e3, 10e3, firdes.WIN_HAMMING, 6.76))
-        self.blocks_multiply_xx_0 = blocks.multiply_vff(1)
-        self.audio_sink_0 = audio.sink(int(audio_rate), "", True)
-        self.analog_wfm_rcv_0 = analog.wfm_rcv(
-            quad_rate=fm_sample,
-            audio_decimation=10,
-        )
-        self.analog_const_source_x_0 = analog.sig_source_f(0, analog.GR_CONST_WAVE, 0, 0, volume)
 
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_gr_complex*1, output_file, False)
         self.blocks_file_sink_0.set_unbuffered(False)
 
         ##################################################
         # Connections
-        ##################################################
-        self.connect((self.analog_const_source_x_0, 0), (self.blocks_multiply_xx_0, 1))    
-        self.connect((self.analog_wfm_rcv_0, 0), (self.rational_resampler_xxx_0, 0))    
-        self.connect((self.blocks_multiply_xx_0, 0), (self.audio_sink_0, 0))    
-        self.connect((self.low_pass_filter_0, 0), (self.analog_wfm_rcv_0, 0))    
-        self.connect((self.osmosdr_source_0, 0), (self.low_pass_filter_0, 0))    
+        ##################################################   
         self.connect((self.osmosdr_source_0, 0), (self.wxgui_fftsink2_0, 0))    
-        self.connect((self.rational_resampler_xxx_0, 0), (self.blocks_multiply_xx_0, 0))
-        self.connect((self.osmosdr_source_0, 0), (self.blocks_file_sink_0, 0))    
-
-
-    def get_volume(self):
-        return self.volume
-
-    def set_volume(self, volume):
-        self.volume = volume
-        self._volume_slider.set_value(self.volume)
-        self._volume_text_box.set_value(self.volume)
-        self.analog_const_source_x_0.set_offset(self.volume)
-
-    def get_sample_rate(self):
-        return self.sample_rate
-
-    def set_sample_rate(self, sample_rate):
-        self.sample_rate = sample_rate
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sample_rate, 100e3, 10e3, firdes.WIN_HAMMING, 6.76))
-        self.osmosdr_source_0.set_sample_rate(self.sample_rate)
-        self.wxgui_fftsink2_0.set_sample_rate(self.sample_rate)
-
-    def get_freq(self):
-        return self.freq
-
-    def set_freq(self, freq):
-        self.freq = freq
-        self.osmosdr_source_0.set_center_freq(self.freq, 0)
-        self.wxgui_fftsink2_0.set_baseband_freq(self.freq)
-        self._freq_slider.set_value(self.freq)
-        self._freq_text_box.set_value(self.freq)
-
-    def get_fm_sample(self):
-        return self.fm_sample
-
-    def set_fm_sample(self, fm_sample):
-        self.fm_sample = fm_sample
-
-    def get_audio_rate(self):
-        return self.audio_rate
-
-    def set_audio_rate(self, audio_rate):
-        self.audio_rate = audio_rate
+        self.connect((self.osmosdr_source_0, 0), (self.blocks_file_sink_0, 0))
 
 
 def main(top_block_cls=rawcapture, options=None):
@@ -260,7 +164,9 @@ def main(top_block_cls=rawcapture, options=None):
     tb.Wait()
 
 def usage():
-    print "How to use:\npython rawcapture.py -f freq (Mhz) -s samp_rate (Mhz) -o output_file"
+    print "How to use:\npython rawcapture.py -f freq (Mhz) -s samp_rate (Mhz) [-o output_file]"
+    print "If you don't use the -o option, the name will be raw_c[freq]_s[samp_rate].iq"
+    sys.exit(2)
 
 
 if __name__ == '__main__':
